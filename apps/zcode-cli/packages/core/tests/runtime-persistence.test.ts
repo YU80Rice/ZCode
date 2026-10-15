@@ -617,6 +617,56 @@ describe("AgentRuntime session persistence", () => {
     });
   });
 
+  it.each([false, true])("empty persisted session hands title to first input (cold resume: %s)", async (coldResume) => {
+    const sessionId = createSessionId(`empty-title-${coldResume}`);
+    const store = createRecordingSessionStore();
+    const eventStore = createTestSessionEventStore();
+    const makeRuntime = () => createTestAgentRuntime(sessionId,
+      { workingDirectory: "/tmp/zcode-empty-title", titleGeneration: { enabled: false } },
+      { sessionStore: store, eventStore,
+        modelFactory: createTestModelFactory({ async generateText() {
+          return { text: "ok", finishReason: "stop", usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } };
+        } } as never) });
+    let runtime = makeRuntime();
+    await runtime.ensureSessionPersistedForExternalActivity("");
+    expect(await store.getSession(sessionId)).toMatchObject({ titleSource: "default" });
+    if (coldResume) { runtime = makeRuntime(); await runtime.resumeFromStore(); }
+    await runtime.executeTurn("hi");
+    expect(await store.getSession(sessionId)).toMatchObject({ title: "hi", titleSource: "first_input" });
+    await runtime.executeTurn("later");
+    expect(await store.getSession(sessionId)).toMatchObject({ title: "hi", titleSource: "first_input" });
+    expect(store.createdSessions).toHaveLength(1);
+    const titleEvents = (await eventStore.getEvents(sessionId))
+      .filter(event => event.type === SessionEventType.SessionTitleUpdated);
+    expect(titleEvents.at(-1)?.payload).toMatchObject({ title: "hi", source: "first_input" });
+  });
+
+  it("concurrent empty persistence does not lose the first real title", async () => {
+    const sessionId = createSessionId("empty-title-concurrent");
+    const store = createRecordingSessionStore();
+    const runtime = createTestAgentRuntime(sessionId, { workingDirectory: "/tmp/zcode-empty-title" }, {
+      sessionStore: store, eventStore: createTestSessionEventStore(),
+    });
+    await Promise.all([
+      runtime.ensureSessionPersistedForExternalActivity(""),
+      runtime.ensureSessionPersistedForExternalActivity("hi"),
+    ]);
+    expect(await store.getSession(sessionId)).toMatchObject({ title: "hi", titleSource: "first_input" });
+    expect(store.createdSessions).toHaveLength(1);
+  });
+
+  it.each(["custom", "generated", "first_input"] as const)("empty persisted session preserves %s title", async (source) => {
+    const sessionId = createSessionId(`empty-title-protected-${source}`);
+    const store = createRecordingSessionStore();
+    const runtime = createTestAgentRuntime(sessionId, { workingDirectory: "/tmp/zcode-empty-title" }, {
+      sessionStore: store, eventStore: createTestSessionEventStore(),
+    });
+    await runtime.ensureSessionPersistedForExternalActivity("");
+    await store.updateSession({ id: sessionId, title: "Keep", titleSource: source });
+    await runtime.ensureSessionPersistedForExternalActivity("hi");
+    expect(await store.getSession(sessionId)).toMatchObject({ title: "Keep", titleSource: source });
+  });
+
   it("creates the session once and persists user and assistant text messages", async () => {
     const sessionId = createSessionId("runtime-persistence-text");
     const store = createRecordingSessionStore();

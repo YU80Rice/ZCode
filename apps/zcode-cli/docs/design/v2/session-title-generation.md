@@ -7,6 +7,7 @@ ZCode 目前在首次持久化 session 时直接从用户输入截断得到 `ses
 核心约束：
 
 - 用户标题和 AI 标题分开，用户手动标题永远优先，AI 标题只作为可重生成的增强元数据。
+- 无输入的持久空会话使用 `default` 标题来源。首条非空输入在同一 runtime 持久化入口通过标题 CAS 将其提升为 `first_input`，冷恢复后也遵循此规则；后续输入不得覆盖 `first_input`、`generated` 或 `custom`。
 - 在 root session 的首条真实用户消息后异步生成标题，并写回 session metadata。
 - 标题生成是低风险 sidecar 能力，不能影响主 agent loop，不能覆盖用户明确命名，必须进入数据库和 session event，方便本地 TUI 的 session list、resume 和 debug 复用。
 

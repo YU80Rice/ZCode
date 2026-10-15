@@ -25,6 +25,7 @@ import { buildPersistedConversationInputIntent } from "./input-intent-persistenc
 import { recordToolUsageFromEvent } from "./usage-observability.js";
 import { persistSessionShellEnvironmentSnapshot } from "./session-shell-environment.js";
 import { persistRuntimeModelSelection } from "./turn-model.js";
+import { promoteInitialSessionTitle } from "./session-initial-title.js";
 import { writeDynamicWorkflowActivationEntryIfActivated } from "./dynamic-workflow-activation.js";
 import {
   persistWorkspaceCheckpointEntry,
@@ -563,12 +564,16 @@ export async function ensureSessionPersisted(
   input: string,
   traceContext: TraceContext,
 ): Promise<void> {
-  if (!this.sessionStore || this.sessionPersisted) return;
+  if (!this.sessionStore) return;
   const pending = pendingSessionPersistence.get(this);
-  if (pending) return pending;
+  if (pending) {
+    await pending;
+    return ensureSessionPersisted.call(this, input, traceContext);
+  }
   // App sampling 可与首轮任务并发；同一任务创建必须合并，避免重复插入及模型配置覆盖。
-  const created = persistSession
-    .call(this, input, traceContext)
+  const created = (this.sessionPersisted
+    ? promoteInitialSessionTitle(this, input, traceContext)
+    : persistSession.call(this, input, traceContext))
     .finally(() => pendingSessionPersistence.delete(this));
   pendingSessionPersistence.set(this, created);
   return created;
@@ -598,6 +603,7 @@ async function persistSession(
     // workspaceKey 查 provider registry 时就会落到另一个身份。持久化必须保留协议入口路径。
     const persistedWorkspacePath = this.config.workspacePath ?? directory;
     const title = titleFromInput(input);
+    const titleSource = input.trim() ? "first_input" : "default";
     const workspaceIdentity = this.config.memory?.workspaceIdentity?.trim();
     await this.sessionStore.createSession({
       id: this.sessionId,
@@ -612,7 +618,7 @@ async function persistSession(
       directory: persistedWorkspacePath,
       path: persistedWorkspacePath,
       title,
-      titleSource: "first_input",
+      titleSource,
       version: this.appVersion,
       permission: {
         mode: this.config.mode ?? "build",
@@ -650,7 +656,7 @@ async function persistSession(
         SessionEventType.SessionTitleUpdated,
         {
           previousTitle: "",
-          source: "first_input",
+          source: titleSource,
           title,
         },
         traceContext,
