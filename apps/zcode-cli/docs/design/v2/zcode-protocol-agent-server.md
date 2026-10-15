@@ -24,6 +24,23 @@ z-code 桌面端后续不再通过 ZCode app-server 兼容多 agent，而是只�
 
 ## 入口链路
 
+### 第三方宿主的独立账户运行时
+
+第三方终端宿主可显式启动 `zcode app-server --stdio --standalone`，
+`agent-server --stdio --standalone` 使用相同能力。参数默认 `false`；现有 Desktop
+Host 不传此参数，继续使用原有账户运行时。
+
+CLI 入口将参数传入公共 `RunZCodeProtocolAgentOptions`。bootstrap 复用
+`startProcessProviderRegistryRuntime` 的 `standalone` 选项，并将它拥有的
+`providerRuntimeHeadersPort` 接入原生 app。凭据、刷新和 provider registry 始终由
+CLI 原有 credential store 及进程账户运行时持有；独立模式不接收 Host 的账户配置
+覆盖，也不依赖 `requestProviderRuntimeHeaders` 反向请求，不引入另一套账户服务。
+会话及子任务复用该进程账户运行时，模型选择与历史保持既有隔离规则。
+
+该参数不改变事件顺序、NDJSON schema、取消或资源释放语义；宿主仍需响应运行偏好
+和权限交互。独立运行失败沿用协议错误传播，不依赖 GUI 降级。验收覆盖参数默认值、
+两个命令别名、新建会话、原生模型列表、CLI 登录、退出，以及 Desktop 默认行为回归。
+
 ```txt
 zcode app-server --stdio
   -> runZCodeProtocolAgent
