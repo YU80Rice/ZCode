@@ -201,7 +201,7 @@ export async function runZCodeProtocolAgent(
         env: options.env,
         logger,
         network: configResult.config.network,
-        sourceTitle: "electron",
+        sourceTitle: options.standalone ? "cli" : "electron",
       });
     // 官方 MCP 身份头端口（spec §7.1/§7.2）：连接池构造早于 server，故用惰性 holder 回填。
     // server 就绪前该端口返回 official_auth_unavailable；HTTP tools/call 会匿名交给服务端
@@ -327,6 +327,7 @@ export async function runZCodeProtocolAgent(
       mcpTelemetry: mcpTelemetryTracker,
       sessionStore,
       syncAccountProviderConfig: activeProviderRegistryRuntime.syncAccountProviderConfig,
+      readStartPlan: activeProviderRegistryRuntime.readStartPlan,
       refreshProviderRegistry: async (reason) => {
         await activeProviderRegistryRuntime.runtime.registryService.refresh(reason);
       },

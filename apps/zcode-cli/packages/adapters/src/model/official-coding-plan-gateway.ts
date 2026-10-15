@@ -28,7 +28,12 @@ export function createStaticProviderEndpointRoutingPort(
           ? ROOT_PATH
           : parsed.pathname.replace(/\/+$/u, "") || ROOT_PATH;
       const key = `${parsed.protocol}//${parsed.hostname.toLowerCase()}:${parsed.port || HTTPS_DEFAULT_PORT}${path}`;
-      const targetPath = GATEWAY_PATH_BY_ENDPOINT.get(key);
+      // Start Plan 的模型与账单必须使用相同 origin；否则隔离部署仍会向官方发送 JWT。
+      const startPlanPath =
+        parsed.origin === "https://zcode.z.ai" && parsed.pathname.startsWith("/api/v1/zcode-plan/")
+          ? parsed.pathname
+          : undefined;
+      const targetPath = startPlanPath ?? GATEWAY_PATH_BY_ENDPOINT.get(key);
       if (!targetPath) return { routed: false, url: requestUrl };
       const target = new URL(targetPath, endpointOrigin);
       target.search = parsed.search;

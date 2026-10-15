@@ -1,4 +1,5 @@
 import { requestVerificationReasons } from "../request-security-edition/verification-policy.js";
+import { startPlanStatusSchema } from "../start-plan-balance.js";
 import { zcodeProtocolTraceSchema } from "./trace.js";
 // Bot 反向回复的名字解析/待澄清结果与 App、CLI 使用同一严格 schema。
 export { channelReplyRequestSchema, channelReplyResultSchema } from "../channel-mention.js";
@@ -1267,6 +1268,12 @@ export const zcodeSessionSettingsStateSchema = z
   })
   .strict();
 export type ZCodeSessionSettingsState = z.infer<typeof zcodeSessionSettingsStateSchema>;
+export const startPlanReadResultSchema = z
+  .object({
+    plans: z.array(startPlanStatusSchema),
+    settings: zcodeSessionSettingsStateSchema.optional(),
+  })
+  .strict();
 export const zcodePendingPermissionSchema = z
   .object({
     requestId: nonEmptyString,
@@ -4113,6 +4120,7 @@ export const zcodeProtocolMethods = {
   workspaceHookTrustGrant: "workspace/hooks/trustGrant",
   // 进程级 Account Provider Config 与 workspace 运行目录分离。
   providerUpdateAccountConfig: "provider/updateAccountConfig",
+  providerReadStartPlan: "provider/readStartPlan",
   workspaceUpdateInteractionPreferences: "workspace/updateInteractionPreferences",
   workspaceUpdateModelIoPreferences: "workspace/updateModelIoPreferences",
   // Off-Peak 工具面门禁是 workspace 级事实（灰度 + 本地/远程），由 host 在 agent 就绪时同步；

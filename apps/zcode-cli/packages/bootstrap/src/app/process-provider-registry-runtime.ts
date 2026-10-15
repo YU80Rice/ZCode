@@ -1,5 +1,6 @@
 import {
   AccountProviderService,
+  ProviderConfigMap,
   MutableAccountProviderConfigSource,
   parseAccountProviderConfigMap,
   type AccountProviderConfigSnapshot,
@@ -29,6 +30,7 @@ import {
   createStandaloneProviderRuntimeHeadersPort,
   readStandaloneAccountProviderConfigSnapshot,
 } from "./standalone-account-provider-runtime.js";
+import { createStandaloneStartPlanRuntime } from "./standalone-start-plan-runtime.js";
 
 export interface ProcessProviderRegistryRuntimeOptions {
   /** Standalone Prompt CLI / TUI 自己拥有账号凭据与旧配置的一次性导入。 */
@@ -56,6 +58,9 @@ export async function startProcessProviderRegistryRuntime(
     ? (options.standalone.credentialStore ?? createSharedZCodeCredentialStore({ env: { ...env } }))
     : undefined;
   let standaloneAccount: AccountProviderService | undefined;
+  const startPlan = credentialStore
+    ? createStandaloneStartPlanRuntime(credentialStore, env)
+    : undefined;
   const bundledFile = options.standalone
     ? env[ZCODE_BUILTIN_PROVIDER_BUNDLED_CONFIG_FILE_ENV]?.trim()
     : undefined;
@@ -100,9 +105,13 @@ export async function startProcessProviderRegistryRuntime(
                     providers: configuredProviders,
                   },
                 );
+                const plans = await startPlan!.read(configuredProviders);
                 return {
-                  providers: snapshot.providers,
-                  states: snapshot.states ?? {},
+                  providers: new ProviderConfigMap([
+                    ...snapshot.providers.entries(),
+                    ...plans.providers.entries(),
+                  ]),
+                  states: { ...snapshot.states, ...plans.states },
                 };
               },
             });
@@ -140,7 +149,7 @@ export async function startProcessProviderRegistryRuntime(
     : undefined;
   // 复用 AccountService 的串行、过期结果丢弃机制，凭据变化与 Built-in 变化不能各自发布。
   const standaloneHeaders = credentialStore
-    ? createStandaloneProviderRuntimeHeadersPort(credentialStore, env)
+    ? createStandaloneProviderRuntimeHeadersPort(credentialStore, env, undefined, startPlan)
     : undefined;
   const disposeCredentialSubscription = credentialStore?.onDidChange?.(async () => {
     await standaloneHeaders?.invalidateChangedCredentials();
@@ -157,6 +166,12 @@ export async function startProcessProviderRegistryRuntime(
       const configuredDefaultModelSelection = await modelSelectionConfigRepository.read();
       return Object.freeze({
         accountSource: standaloneAccount ?? accountSource,
+        async readStartPlan() {
+          if (!startPlan) return { plans: [] };
+          await standaloneAccount!.refresh("start-plan-user-refresh");
+          await runtime.registryService.refresh("start-plan-user-refresh");
+          return { plans: startPlan.getPlans() };
+        },
         async syncAccountProviderConfig(next: AccountProviderConfigSnapshot): Promise<boolean> {
           if (standaloneAccount)
             throw new Error("Standalone Account 由本进程管理，不接收 Host 覆盖");

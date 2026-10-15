@@ -235,6 +235,9 @@ export const buildCli = async ({
     bundle: true,
     define: {
       __CLI_VERSION__: JSON.stringify(cliVersion),
+      __ZCODE_VERSION__: JSON.stringify(
+        await readRootPackageVersion({ root: resolve(rootDirectory, "../..") }),
+      ),
     },
     entryPoints: [resolve(cliDirectory, "src/main.ts")],
     // Ink 7 and yoga-layout use top-level await, so the CJS CLI bundle loads the TUI

@@ -13,6 +13,7 @@ export type CodingPlanProviderId = "bigmodel" | "zai";
 
 export interface LoginZCodeCliOptions {
   providerId?: CodingPlanProviderId;
+  plan?: "start-plan";
   abortSignal?: AbortSignal;
   apiKeyResolver?: ReturnType<typeof createCodingPlanApiKeyResolver>;
   baseUrl?: string;

@@ -29,6 +29,56 @@ const TEST_ENV = {
 };
 
 describe("ZCode CLI login", () => {
+  it.each(["bigmodel", "zai"] as const)(
+    "%s 的 Start Plan 登录无需个人 Coding Plan，保留模型配置",
+    async (providerId) => {
+      const dir = await mkdtemp(join(tmpdir(), "zcode-start-plan-login-"));
+      const credentialStore = createSharedZCodeCredentialStore({ baseDir: dir, env: TEST_ENV });
+      const configPath = join(dir, "provider_config.json");
+      await writeFile(configPath, "existing-user-config");
+      const httpClient = new FakeHttpClient([
+        jsonResponse({
+          code: 0,
+          data: {
+            flow_id: "flow",
+            poll_token: "poll-token",
+            authorize_url: "https://zcode.z.ai/login",
+            expires_at: 9999999999,
+            poll_interval_sec: 1,
+          },
+        }),
+        jsonResponse({
+          code: 0,
+          data: {
+            status: "ready",
+            token: "start-plan-jwt",
+            user: { user_id: "start-user" },
+            [providerId]: { access_token: "oauth-account" },
+          },
+        }),
+      ]);
+      try {
+        const result = await loginZCodeCli({
+          providerId,
+          plan: "start-plan",
+          env: TEST_ENV,
+          credentialStore,
+          httpClient,
+          noBrowser: true,
+          pollToken: "poll-token",
+          personalProviderConfigPath: configPath,
+        });
+        expect(result.model).toBe("");
+        expect(await credentialStore.load(SHARED_ZCODE_CREDENTIAL_KEYS.zcodeJwtToken)).toBe(
+          "start-plan-jwt",
+        );
+        expect(await readFile(configPath, "utf8")).toBe("existing-user-config");
+        expect(httpClient.requests).toHaveLength(2);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+  );
   it("没有任何 Standalone 账号凭据时不会误报已配置 Coding Plan", async () => {
     const dir = await mkdtemp(join(tmpdir(), "zcode-no-login-"));
     const credentialStore = createSharedZCodeCredentialStore({

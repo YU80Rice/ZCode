@@ -1,6 +1,12 @@
 import { querySessionDebug } from "./session-debug.js";
+import { mapSessionSettings } from "./session-mapper.js";
 import { createNodeNetworkCapture } from "@zcode/shared/node";
-import { networkCaptureControlSchema, zcodeProtocolNotifications } from "@zcode/shared";
+import {
+  networkCaptureControlSchema,
+  zcodeProtocolNotifications,
+  startPlanReadParamsSchema,
+  startPlanReadResultSchema,
+} from "@zcode/shared";
 import {
   zcodePluginsCancelOperationParamsSchema,
   zcodeProtocolMethods,
@@ -679,6 +685,15 @@ export class ZCodeProtocolAgentServer {
       }
       case zcodeProtocolMethods.providerUpdateAccountConfig:
         return await updateAccountProviderConfig(this.context, request.params);
+      case zcodeProtocolMethods.providerReadStartPlan: {
+        const params = startPlanReadParamsSchema.parse(request.params ?? {});
+        const result = (await this.context.deps.readStartPlan?.()) ?? { plans: [] };
+        const record = params.sessionId ? this.context.sessions.get(params.sessionId) : undefined;
+        return startPlanReadResultSchema.parse({
+          ...result,
+          ...(record ? { settings: await mapSessionSettings(record.app) } : {}),
+        });
+      }
       case zcodeProtocolMethods.workspaceUpdateInteractionPreferences:
         return await updateInteractionPreferences(this.context, request.params);
       case zcodeProtocolMethods.workspaceUpdateModelIoPreferences:

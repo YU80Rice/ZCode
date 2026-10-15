@@ -15,6 +15,14 @@ describe("static provider endpoint routing", () => {
     [SOURCE, TARGET_PATH],
     ["https://OPEN.BIGMODEL.CN:443/api/anthropic/v1/messages/", TARGET_PATH],
     ["https://api.z.ai/api/anthropic/v1/messages", "/api/v1/ultra-zai/anthropic/v1/messages"],
+    [
+      "https://zcode.z.ai/api/v1/zcode-plan/anthropic/v1/messages",
+      "/api/v1/zcode-plan/anthropic/v1/messages",
+    ],
+    [
+      "https://zcode.z.ai/api/v1/zcode-plan/chat/completions",
+      "/api/v1/zcode-plan/chat/completions",
+    ],
   ])("routes %s with query preserved and no configuration IO", async (source, target) => {
     const network = vi.fn(() => {
       throw new Error("unexpected configuration request");
@@ -35,6 +43,9 @@ describe("static provider endpoint routing", () => {
     "https://open.bigmodel.cn/api/anthropic/v1/complete",
     "https://sub.open.bigmodel.cn/api/anthropic/v1/messages",
     "https://provider.example.test/api/anthropic/v1/messages",
+    "https://sub.zcode.z.ai/api/v1/zcode-plan/anthropic/v1/messages",
+    "https://zcode.z.ai:444/api/v1/zcode-plan/anthropic/v1/messages",
+    "https://zcode.z.ai/api/v1/zcode-plan-other/messages",
     "not a URL",
   ])("leaves unmatched endpoint %s unchanged", async (url) => {
     await expect(createStaticProviderEndpointRoutingPort(ORIGIN).resolve(url)).resolves.toEqual({

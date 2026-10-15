@@ -13,8 +13,13 @@ export async function runLoginCommand(
 ): Promise<number> {
   try {
     const providerId = args[0] ?? "zai";
-    if (args.length > 1 || (providerId !== "zai" && providerId !== "bigmodel")) {
-      throw new Error("Usage: zcode login [zai|bigmodel] [--no-browser]");
+    const startPlan = args[1] === "start-plan";
+    if (
+      args.length > 2 ||
+      (args[1] !== undefined && !startPlan) ||
+      (providerId !== "zai" && providerId !== "bigmodel")
+    ) {
+      throw new Error("Usage: zcode login [zai|bigmodel] [start-plan] [--no-browser]");
     }
     const env = deps.env ?? process.env;
     const workingDirectory = (deps.cwd ?? process.cwd)();
@@ -34,6 +39,7 @@ export async function runLoginCommand(
       env,
       noBrowser,
       providerId,
+      ...(startPlan ? { plan: "start-plan" as const } : {}),
       onAuthorizeUrl: (data) => {
         writeAuthorizeUrl(ctx, options, data.authorize_url, noBrowser, providerId);
       },
@@ -67,7 +73,9 @@ export async function runLoginCommand(
     ctx.stdout.write(
       [
         `Login successful${formatUserLabel(result.user)}.`,
-        `Model: ${result.model}`,
+        result.model
+          ? `Model: ${result.model}`
+          : "Start Plan 登录成功；请在权益生效后从模型列表选择模型。",
         `Credentials: ${result.credentialsPath}`,
         `Model selection: ${result.configPath}`,
       ].join("\n") + "\n",

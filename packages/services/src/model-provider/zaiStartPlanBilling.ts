@@ -1,7 +1,7 @@
 import type { ApiClient } from "@zcode/shared";
 import {
   buildRuntimeZCodeEndpointUrls,
-  normalizeOfficialGlmModelId,
+  normalizeStartPlanExpiry,
   ZCODE_VERSION,
 } from "@zcode/shared";
 import { readApiJson } from "../providers/api/apiJson.js";
@@ -11,49 +11,9 @@ const ZAI_START_PLAN_BALANCE_URL = buildRuntimeZCodeEndpointUrls(
   process.env,
 ).zcodePlanBillingBalanceUrl;
 
-export interface ZaiStartPlanPlan {
-  // user_plan_id 标识用户套餐实例；额度提醒用它关联同一实例的 entitlement 周期类型。
-  user_plan_id?: string;
-  plan_id?: string;
-  name?: string;
-  status?: string;
-  starts_at?: number | string | null;
-  ends_at?: number | string | null;
-  entitlements?: Array<{
-    entitlement_id?: string | null;
-    show_name?: string | null;
-    period?: string | null;
-    effective_at?: number | string | null;
-  }>;
-}
-
-export interface ZaiStartPlanBalanceEnvelope {
-  code?: number;
-  success?: boolean;
-  msg?: string;
-  data?: {
-    server_time?: number;
-    plans?: ZaiStartPlanPlan[];
-    balances?: Array<{
-      bucket_id?: string;
-      user_plan_id?: string;
-      plan_id?: string;
-      entitlement_id?: string;
-      show_name?: string;
-      meter?: string;
-      unit_type?: string;
-      capabilities?: string[];
-      total_units?: number | string | null;
-      used_units?: number | string | null;
-      reserved_units?: number | string | null;
-      remaining_units?: number | string | null;
-      available_units?: number | string | null;
-      period_start?: number | string | null;
-      period_end?: number | string | null;
-      expires_at?: number | string | null;
-    }>;
-  };
-}
+export type { ZaiStartPlanPlan, ZaiStartPlanBalanceEnvelope } from "@zcode/shared";
+import type { ZaiStartPlanBalanceEnvelope } from "@zcode/shared";
+export { resolveZaiStartPlanBalanceModelIds } from "@zcode/shared";
 
 const inflightBalanceRequests = new WeakMap<
   ApiClient,
@@ -124,65 +84,4 @@ export async function fetchZaiStartPlanBalanceEnvelope(
 
   requests.set(requestKey, request);
   return request;
-}
-
-export function resolveZaiStartPlanBalanceModelIds(payload: ZaiStartPlanBalanceEnvelope): string[] {
-  const seen = new Set<string>();
-  const modelIds: string[] = [];
-
-  for (const balance of payload.data?.balances ?? []) {
-    const fromCapabilities = (balance.capabilities ?? [])
-      .map((capability) => {
-        const normalized = capability.trim();
-        return normalized.toLowerCase().startsWith("model:")
-          ? normalized.slice("model:".length).trim()
-          : "";
-      })
-      .filter(Boolean);
-    const candidates = fromCapabilities.length > 0 ? fromCapabilities : [balance.show_name ?? ""];
-    for (const candidate of candidates) {
-      const modelId = normalizeOfficialGlmModelId(candidate.trim());
-      const key = modelId.toLowerCase();
-      if (!modelId || seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      modelIds.push(modelId);
-    }
-  }
-
-  return modelIds;
-}
-
-/** HTTP Date 与本次响应配对，避免旧 JSON 时间让过期 active 记录继续提供权益。 */
-function normalizeStartPlanExpiry(
-  payload: ZaiStartPlanBalanceEnvelope,
-  responseTime?: number,
-): ZaiStartPlanBalanceEnvelope {
-  if (!payload.data) return payload;
-  const serverTime = payload.data.server_time;
-  const now =
-    responseTime ??
-    (typeof serverTime === "number" && Number.isFinite(serverTime) && serverTime >= 0
-      ? serverTime
-      : Date.now() / 1000);
-  const plans = (payload.data.plans ?? []).map((plan) => {
-    const end = Number(plan.ends_at);
-    return plan.status?.trim().toLowerCase() === "active" &&
-      Number.isFinite(end) &&
-      end > 0 &&
-      end <= now
-      ? { ...plan, status: "expired" }
-      : plan;
-  });
-  const balances = payload.data.balances?.filter((balance) => {
-    const owners = plans.filter((plan) =>
-      balance.user_plan_id && plan.user_plan_id
-        ? plan.user_plan_id === balance.user_plan_id
-        : plan.plan_id === balance.plan_id,
-    );
-    // 无归属桶继续由既有诊断处理，不能误删同商品另一个有效实例的余额。
-    return !owners.length || owners.some((plan) => plan.status?.trim().toLowerCase() !== "expired");
-  });
-  return { ...payload, data: { ...payload.data, plans, balances } };
 }

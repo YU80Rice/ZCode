@@ -20,6 +20,7 @@ import {
   ZCODE_BUILTIN_PROVIDER_CONFIG_FILE_ENV,
 } from "@zcode/provider-node";
 import type { ProviderFamilyDomain } from "@zcode/shared";
+import { createStandaloneStartPlanRuntime } from "./standalone-start-plan-runtime.js";
 
 export interface StandaloneCodingPlanProvider {
   readonly family: ProviderFamilyDomain;
@@ -196,6 +197,7 @@ export function createStandaloneProviderRuntimeHeadersPort(
   credentialStore: Pick<SharedZCodeCredentialStore, "load" | "loadMany" | "save" | "delete">,
   env: Readonly<Record<string, string | undefined>>,
   injectedResolver?: ReturnType<typeof createCodingPlanApiKeyResolver>,
+  startPlan = createStandaloneStartPlanRuntime(credentialStore, env),
 ): ProviderRuntimeHeadersPort & {
   clearProjectTokens(): void;
   invalidateChangedCredentials(): Promise<void>;
@@ -234,6 +236,7 @@ export function createStandaloneProviderRuntimeHeadersPort(
       input.abortSignal?.throwIfAborted();
       const providerId = input.providerId.trim();
       const access = input.accountAccess;
+      if (access?.mode === "start-plan") return startPlan.requestAuth(input);
       if (!access || access.mode !== "individual-coding-plan") {
         throw new Error(`Standalone Account Provider 请求身份无效: ${providerId}`);
       }

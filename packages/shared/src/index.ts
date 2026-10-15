@@ -353,6 +353,7 @@ export * from "./conversationSelection.js";
 export * from "./attachment-source.js";
 
 export * from "./channel-mention.js";
+export * from "./start-plan-balance.js";
 
 export {
   requestSecuritySensitiveHeaders,

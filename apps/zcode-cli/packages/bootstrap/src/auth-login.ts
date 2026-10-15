@@ -42,6 +42,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createStandaloneAccountIdentityFromSecret } from "./app/standalone-account-provider-runtime.js";
 import { throwIfAborted, waitWithAbort } from "./auth-login-abort.js";
 import { pollUntilReady } from "./auth-login-polling.js";
+import { prepareStandaloneStartPlanLogin } from "./auth-start-plan-login.js";
 
 const DEFAULT_LOGIN_TIMEOUT_MS = 5 * 60 * 1_000;
 
@@ -98,28 +99,40 @@ export async function loginZCodeCli(
           ? timeoutError()
           : new ZCodeCliLoginError(code, "Authorization failed. Please retry login."),
     });
-    const material = await waitWithAbort(
-      resolveCodingPlanMaterial({
-        accessToken: readyData.accessToken,
-        env,
-        httpClient: options.httpClient,
-        family: providerId,
-        resolver: options.apiKeyResolver,
-        signal,
-      }),
-      signal,
-    );
+    const material =
+      options.plan === "start-plan"
+        ? undefined
+        : await waitWithAbort(
+            resolveCodingPlanMaterial({
+              accessToken: readyData.accessToken,
+              env,
+              httpClient: options.httpClient,
+              family: providerId,
+              resolver: options.apiKeyResolver,
+              signal,
+            }),
+            signal,
+          );
     // 已取消或已超时的登录不能把迟到的 ready 响应写入凭据。
     throwIfAborted(signal);
     // Z.ai 以账号用户 ID 作为连接身份；BigModel 的项目令牌按组织与项目签发，
     // 连接身份沿用组织与项目的稳定摘要，与运行时的令牌缓存范围一致。
     const accountIdentity =
-      providerId === "zai"
+      options.plan === "start-plan" || providerId === "zai"
         ? readyData.user.user_id
         : createStandaloneAccountIdentityFromSecret(
-            JSON.stringify([material.organizationId, material.projectId]),
+            JSON.stringify([material!.organizationId, material!.projectId]),
           );
+    let startPlanConfigPath: string | undefined;
     try {
+      if (options.plan === "start-plan")
+        startPlanConfigPath = await prepareStandaloneStartPlanLogin(
+          credentialStore,
+          options,
+          env,
+          providerId,
+        );
+      throwIfAborted(signal);
       if (providerId === "zai") {
         await credentialStore.saveZaiLoginCredentials({
           accessToken: readyData.accessToken,
@@ -151,6 +164,15 @@ export async function loginZCodeCli(
       );
     }
     throwIfAborted(signal);
+    if (options.plan === "start-plan")
+      return {
+        ...(browser ? { browser } : {}),
+        credentialsPath: credentialStore.filePath,
+        configPath: startPlanConfigPath!,
+        model: "",
+        providerId,
+        user: readyData.user,
+      };
     let configPatch: StandaloneCodingPlanPersistenceResult;
     try {
       configPatch = await persistStandaloneCodingPlanConnection({
