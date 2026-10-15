@@ -1351,6 +1351,12 @@ async function createSessionWithProjection<T>(
       });
       await record.app.resume();
       record.stateRevision++;
+    } else if (params.persistence !== "deferred") {
+      // 首次有效输入前 runtime 尚未落盘；登录后的进程重启会丢失已交付给 Host 的 ID。
+      // immediate 的创建响应必须等待既有 runtime 持久化入口，deferred 草稿仍由首发提升。
+      await record.app.runtime.ensureSessionPersistedForExternalActivity("", {
+        traceContext: record.traceContext,
+      });
     }
     const snapshotStartedAt = Date.now();
     const createdSnapshotResult = await project(record);

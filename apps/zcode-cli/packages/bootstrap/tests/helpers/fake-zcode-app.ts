@@ -102,6 +102,7 @@ export function createFakeApp(
         return { kind: "acquired", leaseId };
       },
       emitModelSelected: async () => undefined,
+      ensureSessionPersistedForExternalActivity: async () => undefined,
       getProjection: async () =>
         ({
           activeToolCalls: [],

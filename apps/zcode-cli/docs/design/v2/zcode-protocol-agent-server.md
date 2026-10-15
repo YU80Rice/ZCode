@@ -71,6 +71,14 @@ message、desktop continuous 或 web remote replayable 的交付语义。
 
 ## 协议进程生命周期
 
+`session/create` 的默认与 `persistence: "immediate"` 会话，必须在返回创建快照前
+通过 runtime 既有持久化入口落盘，空会话也能在进程重启后恢复同一个 ID。
+这覆盖首次登录之前尚无可用模型、或没有成功发送首条消息的情况：Host 登录后
+重启进程读取账户时，不能恢复一个只在旧进程内存中存在的 ID。
+`persistence: "deferred"` 仍保留草稿语义，不提前落盘；历史导入沿用自身持久化路径。
+顺序为 create → 初始设置 → runtime 持久化 → snapshot/响应 → 进程退出 → resume。
+持久化失败按现有创建失败路径释放 app，不能返回可恢复的成功身份。
+
 CLI 入口在第一次异步初始化前接管 stdin/stdout 和信号，拥有唯一 shutdown deadline。
 启动时用有背压的输入缓冲接住协议字节，不能为了观察 EOF 丢弃请求。bootstrap 通过
 `RunZCodeProtocolAgentOptions.lifecycle` 接收取消信号、发起退出并读取同一个绝对 deadline；
