@@ -156,7 +156,11 @@ export async function runZCodeProtocolAgent(
     providerRegistryRuntime = await acquireProtocolStartupResource({
       signal: options.lifecycle?.signal,
       logger,
-      create: () => startProcessProviderRegistryRuntime(runtimeEnv),
+      create: () =>
+        startProcessProviderRegistryRuntime(
+          runtimeEnv,
+          options.standalone ? { standalone: {} } : {},
+        ),
       disposeLate: (runtime) => runtime.dispose(),
     });
     options.lifecycle?.signal.throwIfAborted();
@@ -254,6 +258,13 @@ export async function runZCodeProtocolAgent(
             activeProviderRegistryRuntime.runtime.registryService,
             activeProviderRegistryRuntime.configuredDefaultModelSelection,
           ),
+          // 独立 CLI 凭据只由本进程账户服务提供，不能回退到 Host headers RPC。
+          ...(options.standalone
+            ? {
+                providerRuntimeHeadersPort:
+                  activeProviderRegistryRuntime.providerRuntimeHeadersPort,
+              }
+            : {}),
           // 只读同进程已应用快照；不为子任务另发 Host RPC，也不在 ModelFactory 偷换模型。
           resolveEffectiveModelSelection: (selection) => {
             const view = modelSelectionFacade.getView(undefined, undefined, { selection });
@@ -277,7 +288,7 @@ export async function runZCodeProtocolAgent(
                   }),
               }
             : {}),
-          sourceTitle: "electron",
+          sourceTitle: options.standalone ? "cli" : "electron",
           onToolExecResource: (params) =>
             connection.send({ method: zcodeProtocolNotifications.toolExecResource, params }),
         }),

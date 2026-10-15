@@ -728,6 +728,8 @@ export interface ResolveLatestSessionOptions {
 }
 
 export interface RunZCodeProtocolAgentOptions {
+  /** 第三方 CLI 宿主：复用独立账户运行时，不依赖 Desktop Host 提供凭据。 */
+  standalone?: boolean;
   /** 入口拥有退出时限；bootstrap 只编排取消和资源清理，不直接退出进程。 */
   lifecycle?: {
     readonly signal: AbortSignal;

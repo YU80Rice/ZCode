@@ -239,6 +239,7 @@ const runZCodeProtocolCommand = async (
   deps: RunDependencies,
   presentationSurface: PresentationSurface,
   prepareStorageOnly = false,
+  standalone = false,
 ): Promise<number> => {
   try {
     const env = prepareCliRuntimeEnv(deps.env ?? process.env);
@@ -273,6 +274,7 @@ const runZCodeProtocolCommand = async (
       output: ctx.stdout,
       presentationSurface,
       prepareStorageOnly,
+      standalone,
       version,
     });
     return 0;
@@ -542,6 +544,7 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
         commandDeps,
         presentationSurface,
         parsed.values["prepare-storage"] === true,
+        parsed.values.standalone === true,
       );
     case "doctor":
       return runDoctor(ctx, options, workingDirectory);

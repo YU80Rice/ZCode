@@ -81,6 +81,9 @@ export const parseGlobalArgs = (argv: string[]) =>
       stdio: {
         type: "boolean",
       },
+      standalone: {
+        type: "boolean",
+      },
       surface: {
         type: "string",
       },
